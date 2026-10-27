@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum DiaryMood {
+  JOYFUL
+  CALM
+  NEUTRAL
+  SAD
+  ANXIOUS
+  IRRITATED
+  OVERWHELMED
+  HOPEFUL
+  GRATEFUL
+  RELAXED
+  EXCITED
+  CONFIDENT
+  SENSITIVE
+  LONELY
+}
+
+enum DiarySymptom {
+  NAUSEA
+  VOMITING
+  FATIGUE
+  HEADACHE
+  DIZZINESS
+  HEARTBURN
+  BACK_PAIN
+  ABDOMINAL_DISCOMFORT
+  SHORTNESS_OF_BREATH
+  SWELLING
+  FREQUENT_URINATION
+  SLEEP_PROBLEMS
+  CONSTIPATION
+  LEG_CRAMPS
+  OTHER
+}
+
+enum SymptomSeverity {
+  MILD
+  MODERATE
+  SEVERE
+}
+
+enum SleepQuality {
+  POOR
+  FAIR
+  GOOD
+  EXCELLENT
+}
+
+enum MedicationStatus {
+  ON_TIME
+  LATE
+  MISSED
+  NOT_APPLICABLE
+}
+
+enum VisitStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+enum DoctorQuestionStatus {
+  NEW
+  ANSWERED
+  ARCHIVED
+}
+
+enum ChecklistCategory {
+  DOCUMENTS
+  HEALTH
+  DOCTOR
+  HOSPITAL_BAG
+  BABY
+  OTHER
+}
+
+enum ArticleCategory {
+  PREGNANCY
+  NUTRITION
+  ACTIVITY
+  CHECKLISTS
+  DOCTOR
+}
+
+model User {
+  id               String             @id @default(uuid())
+  email            String             @unique
+  name             String?
+  passwordHash     String
+  role             UserRole           @default(USER)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  pregnancyProfile PregnancyProfile?
+  diaryEntries     DiaryEntry[]
+  visits           Visit[]
+  doctorQuestions  DoctorQuestion[]
+  checklistProgress UserChecklistProgress[]
+  ownedChecklistItems ChecklistItem[]
+
+  @@map("users")
+}
+
+model PregnancyProfile {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  lastPeriodStartDate DateTime?
+  dueDate            DateTime
+  pregnancyWeek      Int?
+  pregnancyDay       Int?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pregnancy_profiles")
+}
+
+model DiaryEntry {
+  id                 String            @id @default(uuid())
+  userId             String
+  entryDate          DateTime
+  wellbeingRating    Int
+  moods              DiaryMood[]       @default([])
+  energyLevel        Int
+  sleepHours         Float
+  sleepQuality       SleepQuality
+  waterMl            Int?
+  medicationStatus   MedicationStatus?
+  weightKg           Decimal?          @db.Decimal(5, 2)
+  basalTemperatureC  Float?
+  notes              String?
+  symptoms           DiarySymptomEntry[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entryDate])
+  @@map("diary_entries")
+}
+
+model DiarySymptomEntry {
+  id           String          @id @default(uuid())
+  diaryEntryId String
+  type         DiarySymptom
+  severity     SymptomSeverity
+  diaryEntry   DiaryEntry      @relation(fields: [diaryEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([diaryEntryId, type])
+  @@map("diary_symptom_entries")
+}
+
+model Visit {
+  id        String      @id @default(uuid())
+  userId    String
+  title     String
+  doctorName String?
+  clinic    String?
+  visitDate DateTime
+  status    VisitStatus @default(PLANNED)
+  notes     String?
+  preparationNotes String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorQuestions DoctorQuestion[]
+
+  @@index([userId, visitDate])
+  @@map("visits")
+}
+
+model DoctorQuestion {
+  id        String               @id @default(uuid())
+  userId    String
+  visitId   String?
+  question  String
+  answer    String?
+  status    DoctorQuestionStatus @default(NEW)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  visit     Visit?               @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([visitId])
+  @@map("doctor_questions")
+}
+
+model ChecklistItem {
+  id          String            @id @default(uuid())
+  week        Int
+  title       String
+  description String?
+  category    ChecklistCategory @default(OTHER)
+  sortOrder   Int               @default(0)
+  isDefault   Boolean           @default(true)
+  ownerUserId String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  owner        User?            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  userProgress UserChecklistProgress[]
+
+  @@index([week, sortOrder])
+  @@index([category])
+  @@index([ownerUserId])
+  @@map("checklist_items")
+}
+
+model UserChecklistProgress {
+  id              String        @id @default(uuid())
+  userId          String
+  checklistItemId String
+  isCompleted     Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checklistItem    ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, checklistItemId])
+  @@index([checklistItemId])
+  @@map("user_checklist_progress")
+}
+
+model PregnancyWeekContent {
+  id              String   @id @default(uuid())
+  week            Int      @unique
+  trimester       Int
+  title           String
+  babySize        String?
+  babyWeight      String?
+  babyLength      String?
+  fruitComparison String?
+  babyDevelopment String
+  motherChanges   String
+  recommendation  String
+  symptoms        String?
+  warnings        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([trimester])
+  @@map("pregnancy_week_contents")
+}
+
+model Article {
+  id          String          @id @default(uuid())
+  title       String
+  slug        String          @unique
+  category    ArticleCategory
+  summary     String?
+  content     String
+  pregnancyWeek Int?
+  readingTimeMinutes Int?
+  isPublished Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([category, isPublished])
+  @@index([pregnancyWeek])
+  @@map("articles")
+}

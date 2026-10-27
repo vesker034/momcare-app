@@ -1,0 +1,1 @@
+ALTER TYPE "ChecklistCategory" ADD VALUE IF NOT EXISTS 'DOCTOR';
